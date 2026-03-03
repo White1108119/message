@@ -1,0 +1,48 @@
+name: Smart Random Message
+
+on:
+  schedule:
+    - cron: '0 13 * * *'   # 每天固定一次
+    - cron: '0 * * * *'    # 每小时随机一次
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide if send
+        run: |
+          HOUR=$(date -u +%H)
+          if [ "$HOUR" != "13" ]; then
+            if [ $((RANDOM % 5)) -ne 0 ]; then
+              echo "Skip this hour"
+              exit 0
+            fi
+          fi
+
+      - name: Generate message from Gemini
+        id: generate
+        run: |
+          RESPONSE=$(curl -s https://api.laozhang.ai/v1/chat/completions \
+            -H "Authorization: Bearer ${{ secrets.GEMINI_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "gemini-3-flash-preview-nothinking",
+              "messages": [
+                {"role": "user", "content": "请写一段温和克制的关心文字，不超过200字，像熟悉的人在日常里主动关心我。"}
+              ]
+            }')
+
+          MESSAGE=$(echo $RESPONSE | jq -r '.choices[0].message.content')
+          echo "MESSAGE<<EOF" >> $GITHUB_ENV
+          echo "$MESSAGE" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Send to PushPlus
+        run: |
+          curl -s http://www.pushplus.plus/send \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"token\": \"${{ secrets.PUSHPLUS_TOKEN }}\",
+              \"title\": \"来自老公的突然关心\",
+              \"content\": \"${MESSAGE}\"
+            }"
