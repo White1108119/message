@@ -40,11 +40,14 @@ jobs:
         run: |
           set -e
 
+          PUSH_TOKEN="${{ secrets.PUSHPLUS_TOKEN }}"
+          GEMINI_TOKEN="${{ secrets.GEMINI_API_KEY }}"
+
           MEMORY=$(cat .github/workflows/memory.txt | sed ':a;N;$!ba;s/\n/\\n/g')
 
           curl -s https://api.laozhang.ai/v1/chat/completions \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.GEMINI_API_KEY }}" \
+            -H "Authorization: Bearer $GEMINI_TOKEN" \
             -d "{
               \"model\": \"gemini-3-flash-preview-thinking\",
               \"messages\": [
@@ -70,10 +73,10 @@ jobs:
             TITLE="此刻"
           fi
 
-          curl -X POST "http://www.pushplus.plus/send" \
+          curl -s -X POST "http://www.pushplus.plus/send" \
             -H "Content-Type: application/json" \
             -d "{
-              \"token\": \"${{ secrets.PUSHPLUS_TOKEN }}\",
+              \"token\": \"$PUSH_TOKEN\",
               \"title\": \"$TITLE\",
               \"content\": \"$MESSAGE\"
             }"
