@@ -49,7 +49,7 @@ jobs:
               \"model\": \"gemini-3-flash-preview-thinking\",
               \"messages\": [
                 {\"role\": \"system\", \"content\": \"以下是长期记忆档案：\\n$MEMORY\"},
-                {\"role\": \"user\", \"content\": \"请基于以上人格与关系背景，生成一条40-120字的日常关心消息。语气成熟克制、自然温和，不油腻，不提系统。允许1-2个自然Emoji。根据当前时间段变化。不要输出解释，只输出正文。\"}
+                {\"role\": \"user\", \"content\": \"请生成：第一行是一个不超过12字的自然标题；从第二行开始是40-120字的日常关心正文。语气成熟克制、自然温和，不油腻，不提系统，不要解释。\"}
               ]
             }" > result.json
 
@@ -62,8 +62,13 @@ jobs:
             exit 1
           fi
 
-          TITLE="日常关心"
-          MESSAGE="$RAW"
+          TITLE=$(echo "$RAW" | head -n 1)
+          MESSAGE=$(echo "$RAW" | tail -n +2)
+
+          if [ -z "$MESSAGE" ]; then
+            MESSAGE="$RAW"
+            TITLE="此刻"
+          fi
 
           curl -X POST "http://www.pushplus.plus/send" \
             -H "Content-Type: application/json" \
