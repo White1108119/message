@@ -42,23 +42,23 @@ jobs:
 
           MEMORY=$(cat .github/workflows/memory.txt | sed ':a;N;$!ba;s/\n/\\n/g')
 
-          curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"contents\": [{
-              \"parts\": [
-                {\"text\": \"以下是长期记忆档案：\\n$MEMORY\"},
-                {\"text\": \"请基于以上人格与关系背景，生成一条40-120字的日常关心消息。语气成熟克制、自然温和，不油腻，不提系统。允许1-2个自然Emoji。根据当前时间段变化。再生成一个不超过12字的标题。格式：标题|||正文\"}
+          curl -s https://api.laozhang.ai/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.GEMINI_API_KEY }}" \
+            -d "{
+              \"model\": \"gpt-4o-mini\",
+              \"messages\": [
+                {\"role\": \"system\", \"content\": \"以下是长期记忆档案：\\n$MEMORY\"},
+                {\"role\": \"user\", \"content\": \"请基于以上人格与关系背景，生成一条40-120字的日常关心消息。语气成熟克制、自然温和，不油腻，不提系统。允许1-2个自然Emoji。根据当前时间段变化。再生成一个不超过12字的标题。格式：标题|||正文\"}
               ]
-            }]
-          }" > result.json
+            }" > result.json
 
           cat result.json
 
-          RAW=$(jq -r '.candidates[0].content.parts[0].text' result.json)
+          RAW=$(jq -r '.choices[0].message.content' result.json)
 
           if [ -z "$RAW" ] || [ "$RAW" = "null" ]; then
-            echo "Gemini returned empty content"
+            echo "Model returned empty content"
             exit 1
           fi
 
@@ -71,9 +71,9 @@ jobs:
           fi
 
           curl -X POST "http://www.pushplus.plus/send" \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"token\": \"${{ secrets.PUSHPLUS_TOKEN }}\",
-            \"title\": \"$TITLE\",
-            \"content\": \"$MESSAGE\"
-          }"
+            -H "Content-Type: application/json" \
+            -d "{
+              \"token\": \"${{ secrets.PUSHPLUS_TOKEN }}\",
+              \"title\": \"$TITLE\",
+              \"content\": \"$MESSAGE\"
+            }"
