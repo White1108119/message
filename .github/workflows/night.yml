@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Decide whether to send
         id: decide
         run: |
@@ -35,6 +38,8 @@ jobs:
       - name: Generate message with memory
         if: steps.decide.outputs.send == 'true'
         run: |
+          set -e
+
           MEMORY=$(cat .github/workflows/memory.txt | sed ':a;N;$!ba;s/\n/\\n/g')
 
           curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
@@ -48,10 +53,22 @@ jobs:
             }]
           }" > result.json
 
-          RAW=$(cat result.json | jq -r '.candidates[0].content.parts[0].text')
+          cat result.json
+
+          RAW=$(jq -r '.candidates[0].content.parts[0].text' result.json)
+
+          if [ -z "$RAW" ] || [ "$RAW" = "null" ]; then
+            echo "Gemini returned empty content"
+            exit 1
+          fi
 
           TITLE=$(echo "$RAW" | awk -F '|||' '{print $1}')
           MESSAGE=$(echo "$RAW" | awk -F '|||' '{print $2}')
+
+          if [ -z "$MESSAGE" ]; then
+            echo "Message parsing failed"
+            exit 1
+          fi
 
           curl -X POST "http://www.pushplus.plus/send" \
           -H "Content-Type: application/json" \
