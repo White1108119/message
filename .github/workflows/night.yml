@@ -46,7 +46,7 @@ jobs:
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.GEMINI_API_KEY }}" \
             -d "{
-              \"model\": \"gpt-4o-mini\",
+              \"model\": \"gemini-3-flash-preview-thinking\",
               \"messages\": [
                 {\"role\": \"system\", \"content\": \"以下是长期记忆档案：\\n$MEMORY\"},
                 {\"role\": \"user\", \"content\": \"请基于以上人格与关系背景，生成一条40-120字的日常关心消息。语气成熟克制、自然温和，不油腻，不提系统。允许1-2个自然Emoji。根据当前时间段变化。再生成一个不超过12字的标题。格式：标题|||正文\"}
