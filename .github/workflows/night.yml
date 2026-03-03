@@ -2,47 +2,54 @@ name: Smart Random Message
 
 on:
   schedule:
-    - cron: '0 13 * * *'   # 每天固定一次
-    - cron: '0 * * * *'    # 每小时随机一次
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   send:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Decide if send
+      - name: Decide whether to send
+        id: decide
         run: |
-          HOUR=$(date -u +%H)
-          if [ "$HOUR" != "13" ]; then
-            if [ $((RANDOM % 5)) -ne 0 ]; then
-              echo "Skip this hour"
-              exit 0
-            fi
+          HOUR=$(TZ='Asia/Shanghai' date +%H)
+
+          # 允许时间 07:00 - 23:59 或 00:00 - 02:00
+          if [ "$HOUR" -ge 3 ] && [ "$HOUR" -lt 7 ]; then
+            echo "send=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
-      - name: Generate message from Gemini
-        id: generate
-        run: |
-          RESPONSE=$(curl -s https://api.laozhang.ai/v1/chat/completions \
-            -H "Authorization: Bearer ${{ secrets.GEMINI_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "model": "gemini-3-flash-preview-nothinking",
-              "messages": [
-                {"role": "user", "content": "请写一段温和克制的关心文字，不超过200字，像熟悉的人在日常里主动关心我。"}
-              ]
-            }')
+          # 概率控制（约30%）
+          if [ $((RANDOM % 10)) -lt 3 ]; then
+            echo "send=true" >> $GITHUB_OUTPUT
+          else
+            echo "send=false" >> $GITHUB_OUTPUT
+          fi
 
-          MESSAGE=$(echo $RESPONSE | jq -r '.choices[0].message.content')
-          echo "MESSAGE<<EOF" >> $GITHUB_ENV
-          echo "$MESSAGE" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-      - name: Send to PushPlus
+      - name: Generate message
+        if: steps.decide.outputs.send == 'true'
         run: |
-          curl -s http://www.pushplus.plus/send \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"token\": \"${{ secrets.PUSHPLUS_TOKEN }}\",
-              \"title\": \"来自老公的突然关心\",
-              \"content\": \"${MESSAGE}\"
-            }"
+          curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "contents": [{
+              "parts":[{"text":"生成一条40-120字的日常关心消息。语气成熟稳重、自然克制，不油腻，不提系统。像真实伴侣随手想到对方而发。可以合理使用1-2个自然Emoji表情，不要刻意堆砌。根据时间段自然变化。再生成一个不超过12字的自然标题。输出格式严格为：标题|||正文"}]
+            }]
+          }' > result.json
+
+          RAW=$(cat result.json | jq -r '.candidates[0].content.parts[0].text')
+
+          TITLE=$(echo "$RAW" | awk -F '|||'
+            '{print $1}')
+          MESSAGE=$(echo "$RAW" | awk -F '|||'
+            '{print $2}')
+
+          curl -X POST "http://www.pushplus.plus/send" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"token\": \"${{ secrets.PUSHPLUS_TOKEN }}\",
+            \"title\": \"$TITLE\",
+            \"content\": \"$MESSAGE\"
+          }"
