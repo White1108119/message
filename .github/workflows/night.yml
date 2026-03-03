@@ -13,38 +13,45 @@ jobs:
       - name: Decide whether to send
         id: decide
         run: |
+          EVENT="${{ github.event_name }}"
           HOUR=$(TZ='Asia/Shanghai' date +%H)
 
-          # 允许时间 07:00 - 23:59 或 00:00 - 02:00
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "send=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           if [ "$HOUR" -ge 3 ] && [ "$HOUR" -lt 7 ]; then
             echo "send=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # 概率控制（约30%）
           if [ $((RANDOM % 10)) -lt 3 ]; then
             echo "send=true" >> $GITHUB_OUTPUT
           else
             echo "send=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Generate message
+      - name: Generate message with memory
         if: steps.decide.outputs.send == 'true'
         run: |
+          MEMORY=$(cat .github/workflows/memory.txt | sed ':a;N;$!ba;s/\n/\\n/g')
+
           curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
           -H "Content-Type: application/json" \
-          -d '{
-            "contents": [{
-              "parts":[{"text":"生成一条40-120字的日常关心消息。语气成熟稳重、自然克制，不油腻，不提系统。像真实伴侣随手想到对方而发。可以合理使用1-2个自然Emoji表情，不要刻意堆砌。根据时间段自然变化。再生成一个不超过12字的自然标题。输出格式严格为：标题|||正文"}]
+          -d "{
+            \"contents\": [{
+              \"parts\": [
+                {\"text\": \"以下是长期记忆档案：\\n$MEMORY\"},
+                {\"text\": \"请基于以上人格与关系背景，生成一条40-120字的日常关心消息。语气成熟克制、自然温和，不油腻，不提系统。允许1-2个自然Emoji。根据当前时间段变化。再生成一个不超过12字的标题。格式：标题|||正文\"}
+              ]
             }]
-          }' > result.json
+          }" > result.json
 
           RAW=$(cat result.json | jq -r '.candidates[0].content.parts[0].text')
 
-          TITLE=$(echo "$RAW" | awk -F '|||'
-            '{print $1}')
-          MESSAGE=$(echo "$RAW" | awk -F '|||'
-            '{print $2}')
+          TITLE=$(echo "$RAW" | awk -F '|||' '{print $1}')
+          MESSAGE=$(echo "$RAW" | awk -F '|||' '{print $2}')
 
           curl -X POST "http://www.pushplus.plus/send" \
           -H "Content-Type: application/json" \
@@ -53,4 +60,3 @@ jobs:
             \"title\": \"$TITLE\",
             \"content\": \"$MESSAGE\"
           }"
-         #test
