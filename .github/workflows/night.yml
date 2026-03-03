@@ -24,11 +24,17 @@ jobs:
             exit 0
           fi
 
+          # 凌晨 3-7 点低概率发送（5%）
           if [ "$HOUR" -ge 3 ] && [ "$HOUR" -lt 7 ]; then
-            echo "send=false" >> $GITHUB_OUTPUT
+            if [ $((RANDOM % 20)) -lt 1 ]; then
+              echo "send=true" >> $GITHUB_OUTPUT
+            else
+              echo "send=false" >> $GITHUB_OUTPUT
+            fi
             exit 0
           fi
 
+          # 其他时段 30% 概率
           if [ $((RANDOM % 10)) -lt 3 ]; then
             echo "send=true" >> $GITHUB_OUTPUT
           else
@@ -43,6 +49,7 @@ jobs:
           PUSH_TOKEN="${{ secrets.PUSHPLUS_TOKEN }}"
           GEMINI_TOKEN="${{ secrets.GEMINI_API_KEY }}"
 
+          NOW=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M')
           MEMORY=$(cat .github/workflows/memory.txt | sed ':a;N;$!ba;s/\n/\\n/g')
 
           curl -s https://api.laozhang.ai/v1/chat/completions \
@@ -51,12 +58,16 @@ jobs:
             -d "{
               \"model\": \"gemini-3-flash-preview-thinking\",
               \"messages\": [
-                {\"role\": \"system\", \"content\": \"以下是长期记忆档案：\\n$MEMORY\"},
-                {\"role\": \"user\", \"content\": \"请生成：第一行是一个不超过12字的自然标题；从第二行开始是40-120字的日常关心正文。语气成熟克制、自然温和，不油腻，不提系统，不要解释。\"}
+                {
+                  \"role\": \"system\",
+                  \"content\": \"当前北京时间：$NOW。请严格根据当前时间段生成合适的问候内容。凌晨语气克制安静，早晨偏清醒鼓励，下午自然过渡，夜晚偏收束与关心。\\n以下是长期记忆档案：\\n$MEMORY\"
+                },
+                {
+                  \"role\": \"user\",
+                  \"content\": \"请生成：第一行是一个不超过12字的自然标题；从第二行开始是40-120字的日常关心正文。内容要自然衔接长期记忆里的细节，但不要刻意重复。语气成熟克制、自然温和，不油腻，不提系统，不要解释。\"
+                }
               ]
             }" > result.json
-
-          cat result.json
 
           RAW=$(jq -r '.choices[0].message.content' result.json)
 
